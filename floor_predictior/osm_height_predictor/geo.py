@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from scipy.spatial import KDTree
+from scipy.spatial import cKDTree
 from sklearn.metrics import make_scorer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import RandomizedSearchCV, GridSearchCV, ParameterGrid, train_test_split
@@ -83,7 +83,9 @@ class SpatialNeighborhoodAnalyzer:
         """
         df = self.df.copy()
         coords = np.array(df["centroid"].apply(lambda pt: (pt.x, pt.y)).to_list())
-        tree = KDTree(coords)
+        tree = cKDTree(coords)
+        neighbor_lists = tree.query_ball_tree(tree, r=self.radius)
+        areas_array = df["shape_area"].to_numpy(dtype="float64", copy=False)
         emda_val = np.sqrt(df["shape_area"].mean()) * 0.5
 
         results = {
@@ -92,11 +94,28 @@ class SpatialNeighborhoodAnalyzer:
             "n_size_maxa": [], "n_size_cva": [],
         }
 
-        for i, (x, y) in tqdm(enumerate(coords), total=len(coords), desc="Neighborhood stats"):
-            idx = tree.query_ball_point([x, y], r=self.radius)
-            idx = [j for j in idx if j != i]
-            dists = np.linalg.norm(coords[idx] - [x, y], axis=1) if idx else np.array([])
-            areas = df.iloc[idx]["shape_area"].values if idx else np.array([])
+        iterator = enumerate(coords)
+        if show_progress:
+            iterator = tqdm(
+                iterator,
+                total=len(coords),
+                desc="Neighborhood stats",
+                ascii=True,
+                dynamic_ncols=True,
+                mininterval=0.5,
+            )
+
+        for i, (x, y) in iterator:
+            idx = neighbor_lists[i]
+            if idx:
+                idx = [j for j in idx if j != i]
+            if idx:
+                neighbor_coords = coords[idx]
+                dists = np.linalg.norm(neighbor_coords - coords[i], axis=1)
+                areas = areas_array[idx]
+            else:
+                dists = np.empty(0, dtype="float64")
+                areas = np.empty(0, dtype="float64")
 
             results["n_counta"].append(len(idx))
             results["omda"].append(np.mean(dists) if len(dists) > 0 else np.nan)
@@ -148,9 +167,12 @@ class SpatialNeighborhoodAnalyzer:
         где artifacts[feature] = {"data": {...}, "plots": {"scatter": fig|None, "lisa": fig|None}}
         """
         artifacts = {}
-
-        gdf_meter = gdf.to_crs(epsg=3857)
-        w = KNN.from_dataframe(gdf_meter, k=k_neighbors, silence_warnings=True)
+        coords = np.array(gdf.geometry.apply(lambda pt: (pt.x, pt.y)).to_list(), dtype="float64")
+        if hasattr(KNN, "from_array"):
+            w = KNN.from_array(coords, k=k_neighbors)
+        else:
+            gdf_meter = gdf.to_crs(epsg=3857)
+            w = KNN.from_dataframe(gdf_meter, k=k_neighbors, silence_warnings=True)
         w.transform = "r"
 
         # копим новые колонки здесь и присоединяем одним join
@@ -161,13 +183,13 @@ class SpatialNeighborhoodAnalyzer:
 
         for col in iterator:
             entry = {"data": {}, "plots": {"scatter": None, "lisa": None}}
-            x = gdf[col].to_numpy()
+            x = pd.to_numeric(gdf[col], errors="coerce").to_numpy(dtype="float64", copy=False)
             finite = np.isfinite(x)
 
             # защита от NaN/нулевой дисперсии
             if finite.sum() < 3 or np.nanstd(x) == 0:
                 lag_name = f"{col}_lag"
-                lag_cols[lag_name] = lag_spatial(w, gdf[col])
+                lag_cols[lag_name] = lag_spatial(w, x)
                 entry["data"].update({
                     "skipped": True,
                     "reason": "constant_or_too_few_values",
@@ -182,11 +204,11 @@ class SpatialNeighborhoodAnalyzer:
 
             # 1) spatial lag
             lag_name = f"{col}_lag"
-            lag_cols[lag_name] = lag_spatial(w, gdf[col])
+            lag_cols[lag_name] = lag_spatial(w, x)
             entry["data"]["lag_name"] = lag_name
 
             # 2) global Moran
-            moran = Moran(gdf[col].values, w)
+            moran = Moran(x, w)
             I = float(moran.I) if np.isfinite(moran.I) else np.nan
             p = float(moran.p_sim)
             entry["data"]["moran_I"] = I
@@ -207,7 +229,7 @@ class SpatialNeighborhoodAnalyzer:
 
             # 3) LISA — только если Moran достаточно высокий
             if np.isfinite(I) and I >= 0.3:
-                lisa = Moran_Local(gdf[col].values, w)
+                lisa = Moran_Local(x, w, n_jobs=-1)
                 lisa_name = f"{col}_lisa_cluster"
                 cluster = lisa.q.copy()
                 cluster[lisa.p_sim > 0.05] = 0
