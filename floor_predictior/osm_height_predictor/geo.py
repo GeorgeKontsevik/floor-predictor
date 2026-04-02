@@ -103,6 +103,7 @@ class SpatialNeighborhoodAnalyzer:
                 ascii=True,
                 dynamic_ncols=True,
                 mininterval=0.5,
+                leave=False,
             )
 
         for i, (x, y) in iterator:
@@ -179,7 +180,18 @@ class SpatialNeighborhoodAnalyzer:
         lag_cols = {}
         lisa_cols = {}
 
-        iterator = tqdm(feature_columns, desc="Moran/LISA per feature", leave=False) if show_progress else feature_columns
+        iterator = (
+            tqdm(
+                feature_columns,
+                desc="Moran/LISA per feature",
+                leave=False,
+                ascii=True,
+                dynamic_ncols=True,
+                mininterval=0.5,
+            )
+            if show_progress
+            else feature_columns
+        )
 
         for col in iterator:
             entry = {"data": {}, "plots": {"scatter": None, "lisa": None}}
@@ -197,8 +209,6 @@ class SpatialNeighborhoodAnalyzer:
                     "moran_I": np.nan,
                     "moran_p": np.nan,
                 })
-                if show_progress:
-                    iterator.set_postfix_str(f"{col}: skipped")
                 artifacts[col] = entry
                 continue
 
@@ -213,11 +223,6 @@ class SpatialNeighborhoodAnalyzer:
             p = float(moran.p_sim)
             entry["data"]["moran_I"] = I
             entry["data"]["moran_p"] = p
-
-            if show_progress:
-                # лаконичный статус в прогрессе
-                postfix = f"{col}: I={I:.3f}" if np.isfinite(I) else f"{col}: I=nan"
-                iterator.set_postfix_str(postfix)
 
             if plot:
                 fig1, ax1 = plt.subplots(figsize=(5, 5))
