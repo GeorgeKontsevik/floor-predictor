@@ -188,7 +188,25 @@ class RoadProcessor:
         b.to_crs(self.local_crs, inplace=True)
 
         # базовые столбцы, которые протаскиваем (если они есть)
-        base_keep = [c for c in ["building", "landuse", "land_building"] + ALL_TAGS + ID_GEOMETRY if c in b.columns]
+        # Поддерживаем два источника тегов:
+        # 1) legacy all_tag_keys/all_tags
+        # 2) уже раскрытые прямые OSM-колонки (source/name/amenity/.../building:levels)
+        tag_raw_cols = [
+            "source",
+            "addr:street",
+            "name",
+            "amenity",
+            "brand",
+            "website",
+            "shop",
+            "roof:shape",
+            "building:levels",
+        ]
+        base_keep = [
+            c
+            for c in ["building", "landuse", "land_building"] + ALL_TAGS + tag_raw_cols + ID_GEOMETRY
+            if c in b.columns
+        ]
 
         # «скелет» + собственный ключ строк
         base = b[base_keep].copy()
@@ -264,9 +282,10 @@ class RoadProcessor:
         # площадь полигона (в метрах^2)
         base["area"] = base.geometry.area
 
-        # one-hot по наличию ключей в all_tag_keys (ожидаем set/list)
+        # one-hot по наличию ключей:
+        # приоритет all_tag_keys, fallback — прямые колонки (если уже раскрыты upstream).
         if "all_tag_keys" in base.columns:
-            def has_key_set(keys, k):  # keys может быть list, делаем set один раз
+            def has_key_set(keys, k):
                 if isinstance(keys, set):
                     return k in keys
                 if isinstance(keys, (list, tuple)):
@@ -275,10 +294,20 @@ class RoadProcessor:
 
             for k in onehot_tag_keys:
                 base[f"tag_{k}"] = [1 if has_key_set(ks, k) else 0 for ks in base["all_tag_keys"]]
-        # value‑теги: вытаскиваем значения из словаря all_tags
-        if "all_tags" in base.columns:
-            for k in value_tags:
+        else:
+            for k in onehot_tag_keys:
+                if k in base.columns:
+                    base[f"tag_{k}"] = (
+                        base[k].notna()
+                        & (base[k].astype("string").str.strip() != "")
+                    ).astype("int8")
+
+        # value‑теги: вытаскиваем из all_tags, а если их нет — берём прямые колонки.
+        for k in value_tags:
+            if "all_tags" in base.columns:
                 base[k] = base["all_tags"].map(lambda d: d.get(k) if isinstance(d, dict) else np.nan)
+            elif k in base.columns:
+                base[k] = base[k]
 
         # этажность -> числовая
         if "building:levels" in base.columns:

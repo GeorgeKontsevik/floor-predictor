@@ -1,3 +1,5 @@
+import json
+
 import libpysal
 import numpy as np
 import pandas as pd
@@ -16,6 +18,33 @@ from splot.esda import moran_scatterplot, lisa_cluster
 import joblib, sklearn
 from datetime import datetime
 from types import SimpleNamespace
+
+
+def _hashable_categorical_value(value):
+    if isinstance(value, dict):
+        try:
+            return json.dumps(value, sort_keys=True, default=str)
+        except Exception:
+            return str(value)
+    if isinstance(value, (list, tuple, set)):
+        try:
+            if isinstance(value, set):
+                try:
+                    items = sorted(value)
+                except Exception:
+                    items = sorted(str(item) for item in value)
+                return json.dumps(items, default=str)
+            return json.dumps(list(value), default=str)
+        except Exception:
+            return str(value)
+    return value
+
+
+def _normalize_categorical_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    normalized = frame.copy()
+    for col in normalized.columns:
+        normalized[col] = normalized[col].map(_hashable_categorical_value)
+    return normalized
 
 
 
@@ -429,7 +458,8 @@ class StoreyModelTrainer:
         X = df.drop(columns=drop_cols, errors="ignore")
         cat_cols = X.select_dtypes(include=["object", "category"]).columns
         if len(cat_cols) > 0:
-            dummies = pd.get_dummies(X[cat_cols], prefix=cat_cols, dtype=int)
+            cat_frame = _normalize_categorical_frame(X[cat_cols])
+            dummies = pd.get_dummies(cat_frame, dtype=int)
             X = pd.concat([X.drop(columns=cat_cols), dummies], axis=1)
 
         if feature_names is not None:
@@ -486,7 +516,8 @@ class StoreyModelTrainer:
             X = df.drop(columns=drop_cols, errors="ignore")
             cat_cols = X.select_dtypes(include=["object", "category"]).columns
             if len(cat_cols) > 0:
-                dummies = pd.get_dummies(X[cat_cols], prefix=cat_cols, dtype=int)
+                cat_frame = _normalize_categorical_frame(X[cat_cols])
+                dummies = pd.get_dummies(cat_frame, dtype=int)
                 X = pd.concat([X.drop(columns=cat_cols), dummies], axis=1)
             X = X.reindex(columns=feature_names, fill_value=0)
             return X
