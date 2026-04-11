@@ -101,19 +101,34 @@ class AmenityProcessor:
         parking["parking_area"] = parking.geometry.area
 
         # защита от маленьких выборок/повторяющихся значений
-        uniq_vals = np.unique(parking["parking_area"])
+        area_vals = parking["parking_area"].to_numpy(dtype="float64", copy=True)
+        uniq_vals = np.unique(area_vals)
+        area_min = float(np.nanmin(area_vals))
+        area_max = float(np.nanmax(area_vals))
         if len(uniq_vals) < n_classes:
             # fallback: квантильные бины
             q = np.linspace(0, 1, min(len(uniq_vals), n_classes) + 1)
-            breaks = parking["parking_area"].quantile(q).to_numpy()
-            breaks[0] = parking["parking_area"].min() - 1e-6
-            breaks[-1] = parking["parking_area"].max() + 1e-6
+            breaks = parking["parking_area"].quantile(q).to_numpy(dtype="float64", copy=True)
         else:
             # Jenks natural breaks
-            breaks = np.array(jenkspy.jenks_breaks(parking["parking_area"].to_numpy(), n_classes=n_classes), dtype="float64")
-            # подправим крайние границы, чтобы pd.cut включил крайние значения
-            breaks[0] -= 1e-6
-            breaks[-1] += 1e-6
+            breaks = np.array(
+                jenkspy.jenks_breaks(parking["parking_area"].to_numpy(), n_classes=n_classes),
+                dtype="float64",
+                copy=True,
+            )
+
+        # В некоторых версиях pandas/numpy массив квантилей может быть read-only.
+        # Явно делаем writable копию и нормализуем границы для стабильного pd.cut.
+        breaks = np.array(breaks, dtype="float64", copy=True)
+        breaks = breaks[np.isfinite(breaks)]
+        breaks = np.unique(breaks)
+
+        if len(breaks) < 2:
+            pad = max(abs(area_min) * 1e-6, 1e-6)
+            breaks = np.array([area_min - pad, area_max + pad], dtype="float64", copy=True)
+        else:
+            breaks[0] = min(float(breaks[0]), area_min - 1e-6)
+            breaks[-1] = max(float(breaks[-1]), area_max + 1e-6)
 
         labels = [f"bin{i+1}" for i in range(len(breaks) - 1)]
         parking["parking_bin"] = pd.cut(parking["parking_area"], bins=breaks, labels=labels, include_lowest=True)
