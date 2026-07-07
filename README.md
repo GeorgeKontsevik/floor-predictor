@@ -1,5 +1,7 @@
 # floor-predictor
 
+[![OSA-improved](https://img.shields.io/badge/improved%20by-OSA-yellow)](https://github.com/aimclub/OSA)
+
 OSM-based building floor and living-space prediction experiments. The repo prepares building/amenity/road features and runs the prediction notebooks.
 
 ## System Map
@@ -36,3 +38,4 @@ No standalone publication tracked; support repo for urban morphology inputs.
 ## Next Steps / Heuristics
 
 Heuristic: prefer simple OSM-derived predictors and transparent feature tables; only add model complexity when it beats clear baselines on held-out cities.
+
