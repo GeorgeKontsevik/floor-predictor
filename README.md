@@ -1,19 +1,21 @@
 # floor-predictor
 
-OSM-based living-building and floor-count prediction.
+OSM-based building floor and living-space prediction experiments. The repo prepares building/amenity/road features and runs the prediction notebooks.
 
-## Scheme
+## System Map
 
 ```mermaid
 flowchart LR
-    A[Inputs] --> B[Run: pipeline.ipynb]
-    B --> C[Checked outputs]
-    C --> D[Paper / thesis use]
+    OSM[OSM buildings / roads / POI] --> FEATURES[feature builders]
+    FEATURES --> HEIGHT[height predictor]
+    FEATURES --> LIVING[living-space predictor]
+    HEIGHT --> OUT[predicted floors]
+    LIVING --> OUT
 ```
 
-## Main Result
+## Main Image
 
-![Main result](docs/readme_result.svg)
+![OSM floor and living-space prediction pipeline](docs/readme_project_map.svg)
 
 ## Run
 
@@ -25,14 +27,12 @@ Human:
 pip install -e . && jupyter notebook pipeline.ipynb
 ```
 
-Agent:
-
-Reuse existing processors before adding data cleaners.
+Agent: inspect feature coverage and missing-value rates before trusting predicted floor/living-area outputs.
 
 ## Publication
 
-No standalone publication tracked.
+No standalone publication tracked; support repo for urban morphology inputs.
 
 ## Next Steps / Heuristics
 
-Heuristic: random-forest baseline first; only add model complexity after checked error cases.
+Heuristic: prefer simple OSM-derived predictors and transparent feature tables; only add model complexity when it beats clear baselines on held-out cities.
