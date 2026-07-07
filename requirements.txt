@@ -1,0 +1,9 @@
+esda
+geopandas
+jenkspy
+libpysal
+matplotlib
+osmnx
+scikit-learn
+splot
+tqdm>=4.66
