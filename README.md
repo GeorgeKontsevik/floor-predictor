@@ -1,9 +1,38 @@
 # floor-predictor
 
-В pipeline находится реализация двух моделей:
-1. Предсказание жилых зданий (RES / NON_RES)
-2. Предсказание этажности жилых зданий
+OSM-based living-building and floor-count prediction.
 
-Для предсказания жилых зданий реализована модель на основе случайного леса.
-Предсказание этажности также основано на случайном лесе, но возможна подстановка других вариантов. Для подготовки данных используйте `osm_living_predictor`. Затем подготовленные данные можно использовать для предсказания этажности в `osm_height_predictor`.
+## Scheme
 
+```mermaid
+flowchart LR
+    A[Inputs] --> B[Run: pipeline.ipynb]
+    B --> C[Checked outputs]
+    C --> D[Paper / thesis use]
+```
+
+## Main Result
+
+![Main result](docs/readme_result.svg)
+
+## Run
+
+Entrypoint: `pipeline.ipynb`
+
+Human:
+
+```bash
+pip install -e . && jupyter notebook pipeline.ipynb
+```
+
+Agent:
+
+Reuse existing processors before adding data cleaners.
+
+## Publication
+
+No standalone publication tracked.
+
+## Next Steps / Heuristics
+
+Heuristic: random-forest baseline first; only add model complexity after checked error cases.
