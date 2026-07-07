@@ -13,9 +13,9 @@ flowchart LR
     LIVING --> OUT
 ```
 
-## Main Image
+## Saved Results
 
-![OSM floor and living-space prediction pipeline](docs/readme_project_map.svg)
+No saved result image is tracked in this repo yet. Keep future validation maps or metric plots under `docs/` or `outputs/` before linking them here.
 
 ## Run
 
